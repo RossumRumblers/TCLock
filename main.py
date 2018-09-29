@@ -61,6 +61,8 @@ def runUSB(port, reader):
             if x["ID"] == Id:
                 onSuccess(port['gpio_lock'], port['gpio_led_green'])
                 break
+        else:
+            onFail(port['gpio_led_red'])
     reader.ungrabDevice()
 
 def initGPIO():
@@ -75,6 +77,11 @@ def onSuccess(lock_pin, green_pin):
     time.sleep(5)
     GPIO.output(green_pin, 1)
     GPIO.output(lock_pin, 1)
+
+def onFail(red_pin):
+    GPIO.output(red_pin, 0)
+    time.sleep(3)
+    GPIO.output(red_pin, 1)
 
 if __name__ == "__main__":
     initGPIO()

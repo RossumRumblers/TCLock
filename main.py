@@ -20,22 +20,25 @@ cardRegex = r";601744(\d{10})\d(\d{10})\?"
 #Regex used to search USB Physical Addresses
 usbRegex = r"usb-.+-(\d\.\d)\/input0"
 
-###TODO###
-# This info needs to be updated for the PI
-# namely the Physical Port information and
-# the GPIO Stuff
 portDevices = [
     {
-        "name": "port1",
-        "port": "1.2",
-        "GPIO": 0,
+        "name": "cab_left",
+        "port": "1.5",
+        "gpio_lock": 7,
+        "gpio_led_green": 13,
+        "gpio_led_red": 33,
     },
     {
-        "name": "port2",
-        "port": "1.1",
-        "GPIO": 0,
+        "name": "cab_right",
+        "port": "1.4",
+        "gpio_lock": 11,
+        "gpio_led_green": 29,
+        "gpio_led_red": 31,
     }
 ]
+
+#break out all relay GPIO pins for simplicity
+gpioList = [7,11,13,15,29,31,33,35]
 
 authorizedUsers = {}
 
@@ -56,21 +59,22 @@ def runUSB(port, reader):
 
         for x in authorizedUsers["users"]:
             if x["ID"] == Id:
-                openLock(port['GPIO'])
+                onSuccess(port['gpio_lock'], port['gpio_led_green'])
                 break
     reader.ungrabDevice()
 
 def initGPIO():
     GPIO.setmode(GPIO.BOARD)
     GPIO.setwarnings(False)
-    GPIO.setup([port['GPIO'] for port in portDevices], GPIO.OUT, initial=0)
+    GPIO.setup(gpioList, GPIO.OUT, initial=1)
 
 
-#making initial assumtions about what the lock interface will be
-def openLock(pin):
-    GPIO.output(pin, 1)
+def onSuccess(lock_pin, green_pin):
+    GPIO.output(green_pin, 0)
+    GPIO.output(lock_pin, 0)
     time.sleep(5)
-    GPIO.output(pin, 0)
+    GPIO.output(green_pin, 1)
+    GPIO.output(lock_pin, 1)
 
 if __name__ == "__main__":
     initGPIO()

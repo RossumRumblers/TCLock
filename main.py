@@ -1,8 +1,10 @@
 import re
-import USB
 import evdev
 import time
+import json
 import threading
+
+import USB
 
 try:
     import RPi.GPIO as GPIO
@@ -35,20 +37,27 @@ portDevices = [
     }
 ]
 
-###TODO###
-#Find a better way to do this
-#maybe a stored CSV or JSON
-authorizedUsers = [
-    "1207467036"
-]
+authorizedUsers = {}
+
+def getUsers():
+    global authorizedUsers
+    try:
+        json_data = open("./user.json").read()
+        authorizedUsers = json.loads(json_data)
+        print(authorizedUsers)
+    except FileNotFoundError:
+        open("file.txt", 'w+')
 
 def runUSB(port, reader):
     print("starting", port['name'])
     reader.grabDevice()
     while True:
         Id = reader.extractID(reader.interpretEvents(reader.readData()), cardRegex)
-        if Id in authorizedUsers:
-            openLock(port['GPIO'])
+
+        for x in authorizedUsers["users"]:
+            if x["ID"] == Id:
+                openLock(port['GPIO'])
+                break
     reader.ungrabDevice()
 
 def initGPIO():
@@ -64,6 +73,9 @@ def openLock(pin):
     GPIO.output(pin, 0)
 
 if __name__ == "__main__":
+    initGPIO()
+    getUsers()
+
     #get all USB Devices in an iterable List
     for device in [evdev.InputDevice(fn) for fn in evdev.list_devices()]:
         #filter the ones with a particular VID and PID

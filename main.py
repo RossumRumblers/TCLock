@@ -41,8 +41,19 @@ portDevices_mutex = threading.Lock()
 #break out all relay GPIO pins for simplicity
 gpioList = [7,11,13,15,29,31,33,35]
 
+# {
+#     "users": [
+#         user_id,
+#         user_id,
+#         ...
+#     ]
+# }
 authorizedUsers = {}
 authorizedUsers_mutex = threading.Lock()
+
+# variable used in detecting the programming mode
+key_mode = False
+key_mutex = threading.lock()
 
 def getUsers():
     #no threads started at this point so locking is needless
@@ -53,30 +64,45 @@ def getUsers():
     except FileNotFoundError:
         open("user.json", 'w+')
 
+def setUsers():
+    # nolocking in this function as it will be called from a critical section
+    global authorizedUsers
+
+    with open("user.json", 'w') as f:
+        f.write(json.dumps(authorizedUsers))
+
 def runUSB(port, reader):
     print("starting", port['name'])
 
-    portDevices_mutex.acquire(True)
-    lock_pin  = port['gpio_lock']
-    green_led = port['gpio_led_green']
-    red_led   = port['gpio_led_red']
-    portDevices_mutex.release()
+    lock_pin, green_led, red_led = (0,0,0)
+
+    with portDevices_mutex:
+        lock_pin  = port['gpio_lock']
+        green_led = port['gpio_led_green']
+        red_led   = port['gpio_led_red']
 
     reader.grabDevice()
     while True:
         #this call is blocking
         user_id = reader.extractID(reader.interpretEvents(reader.readData()), cardRegex)
 
-        authorizedUsers_mutex.acquire(True)
-        for x in authorizedUsers["users"]:
-            if x["ID"] == user_id:
-                onSuccess(lock_pin, green_led)
-                break
-        else:
-            onFail(red_led)
-        authorizedUsers_mutex.release()
+        is_pgm_mode = False
+        with key_mutex:
+            is_pgm_mode = key_mode
 
-    reader.ungrabDevice()
+        with authorizedUsers_mutex:
+            if not is_pgm_mode:
+                for x in authorizedUsers["users"]:
+                    if x == user_id:
+                        onSuccess(lock_pin, green_led)
+                        break
+                else:
+                    onFail(red_led)
+            else:
+                authorizedUsers["users"] += user_id
+                setUsers()
+
+    reader.ungrabDevice() # this will never be called...
 
 def initGPIO():
     GPIO.setmode(GPIO.BOARD)
@@ -112,3 +138,11 @@ if __name__ == "__main__":
                 if portObj['port'] == deviceBus:
                     #we don't save the the thread object here because we never need to touch it after creating it
                     threading.Thread(target=runUSB, args=(portObj, USB.Reader(device))).start()
+    key_pin = 0 #TODO
+    # if we maintain a cached_value then we only lock the key_mutex when the key_value is updated
+    cached_value = key_mode
+    while True:
+        lock_cache = GPIO.input(key_pin);
+        if lock_cache != cached_value:
+            with key_mutex:
+                lock_mode = lock_cache

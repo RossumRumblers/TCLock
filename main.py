@@ -49,7 +49,7 @@ def getUsers():
         authorizedUsers = json.loads(json_data)
         print(authorizedUsers)
     except FileNotFoundError:
-        open("file.txt", 'w+')
+        open("user.json", 'w+')
 
 def runUSB(port, reader):
     print("starting", port['name'])

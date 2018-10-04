@@ -36,33 +36,46 @@ portDevices = [
         "gpio_led_red": 31,
     }
 ]
+portDevices_mutex = threading.Lock()
 
 #break out all relay GPIO pins for simplicity
 gpioList = [7,11,13,15,29,31,33,35]
 
 authorizedUsers = {}
+authorizedUsers_mutex = threading.Lock()
 
 def getUsers():
+    #no threads started at this point so locking is needless
     global authorizedUsers
     try:
-        json_data = open("./user.json").read()
-        authorizedUsers = json.loads(json_data)
-        print(authorizedUsers)
+        with open("./user.json", "r") as f:
+            authorizedUsers = json.loads(f.read())
     except FileNotFoundError:
         open("user.json", 'w+')
 
 def runUSB(port, reader):
     print("starting", port['name'])
+
+    portDevices_mutex.acquire(True)
+    lock_pin  = port['gpio_lock']
+    green_led = port['gpio_led_green']
+    red_led   = port['gpio_led_red']
+    portDevices_mutex.release()
+
     reader.grabDevice()
     while True:
-        Id = reader.extractID(reader.interpretEvents(reader.readData()), cardRegex)
+        #this call is blocking
+        user_id = reader.extractID(reader.interpretEvents(reader.readData()), cardRegex)
 
+        authorizedUsers_mutex.acquire(True)
         for x in authorizedUsers["users"]:
-            if x["ID"] == Id:
-                onSuccess(port['gpio_lock'], port['gpio_led_green'])
+            if x["ID"] == user_id:
+                onSuccess(lock_pin, green_led)
                 break
         else:
-            onFail(port['gpio_led_red'])
+            onFail(red_led)
+        authorizedUsers_mutex.release()
+
     reader.ungrabDevice()
 
 def initGPIO():
